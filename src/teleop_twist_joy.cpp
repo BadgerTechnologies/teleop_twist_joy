@@ -58,6 +58,12 @@ struct TeleopTwistJoy::Impl
   std::map<std::string, double> scale_angular_turbo_map;
 
   bool sent_disable_msg;
+
+  double inactivity_timeout;
+  void restart_inactivity_timer(void);
+  void stop_inactivity_timer(void);
+  ros::Timer timer;
+  void inactivityTimerCallback(const ros::TimerEvent& e);
 };
 
 /**
@@ -125,6 +131,14 @@ TeleopTwistJoy::TeleopTwistJoy(ros::NodeHandle* nh, ros::NodeHandle* nh_param)
   }
 
   pimpl_->sent_disable_msg = false;
+
+  // if the inactivity_timeout is <= 0, it is disabled
+  nh_param->param<double>("inactivity_timeout", pimpl_->inactivity_timeout, -1.0);
+  // if the inactivity_timout is enabled, create a one-shot timer that is stopped
+  if (pimpl_->inactivity_timeout > 0.0)
+  {
+    pimpl_->timer = nh->createTimer(ros::Duration(pimpl_->inactivity_timeout), &TeleopTwistJoy::Impl::inactivityTimerCallback, pimpl_, true, false);
+  }
 }
 
 void TeleopTwistJoy::Impl::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg)
@@ -161,6 +175,7 @@ void TeleopTwistJoy::Impl::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg
 
     cmd_vel_pub.publish(cmd_vel_msg);
     sent_disable_msg = false;
+    restart_inactivity_timer();
   }
   else if (joy_msg->buttons[enable_button])
   {
@@ -191,6 +206,7 @@ void TeleopTwistJoy::Impl::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg
 
     cmd_vel_pub.publish(cmd_vel_msg);
     sent_disable_msg = false;
+    restart_inactivity_timer();
   }
   else
   {
@@ -200,7 +216,37 @@ void TeleopTwistJoy::Impl::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg
     {
       cmd_vel_pub.publish(cmd_vel_msg);
       sent_disable_msg = true;
+      stop_inactivity_timer();
     }
+  }
+}
+
+void TeleopTwistJoy::Impl::restart_inactivity_timer(void)
+{
+  if (inactivity_timeout > 0.0)
+  {
+    timer.stop();
+    timer.setPeriod(ros::Duration(inactivity_timeout));
+    timer.start();
+  }
+}
+
+void TeleopTwistJoy::Impl::stop_inactivity_timer(void)
+{
+  if (inactivity_timeout > 0.0)
+  {
+    timer.stop();
+  }
+}
+
+void TeleopTwistJoy::Impl::inactivityTimerCallback(const ros::TimerEvent& e)
+{
+  if (!sent_disable_msg)
+  {
+    geometry_msgs::Twist cmd_vel_msg;
+    ROS_INFO_NAMED("TeleopTwistJoy", "Joystick timed out, stopping motion");
+    cmd_vel_pub.publish(cmd_vel_msg);
+    sent_disable_msg = true;
   }
 }
 
