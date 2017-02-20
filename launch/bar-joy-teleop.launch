@@ -1,0 +1,22 @@
+<!-- connecting a PS4 DualShock2 remote (via ds4drv) to BAR -->
+<launch>
+	<param name="teleop_ps4/reread_parameters_button" value="5"/>
+	<param name="teleop_ps4/enable_button" value="4"/>
+	<param name="teleop_ps4/axis_linear" value="1"/>
+	<param name="teleop_ps4/axis_angular" value="2"/>
+	<param name="teleop_ps4/scale_linear_up_button" value="3"/>
+	<param name="teleop_ps4/scale_linear_down_button" value="1"/>
+	<param name="teleop_ps4/scale_angular_up_button" value="2"/>
+	<param name="teleop_ps4/scale_angular_down_button" value="0"/>
+	<param name="teleop_ps4/scale_linear" value="0.5"/>
+	<param name="teleop_ps4/scale_angular" value="0.5"/>
+	<param name="teleop_ps4/inactivity_timeout" value="0.25"/>
+	<param name="joystick_ps4/dev" value="/dev/input/js4"/>
+	<node pkg="joy" name="joystick_ps4" type="joy_node">
+		<remap from="/joy" to="/joy_ps4"/>
+	</node>
+	<node pkg="teleop_twist_joy" name="teleop_ps4" type="teleop_node">
+		<remap from="/joy" to="/joy_ps4"/>
+		<remap from="/cmd_vel" to="/cmd_vel_mux/input/joystick_ps4"/>
+	</node>
+</launch>
