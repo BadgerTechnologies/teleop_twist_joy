@@ -1,0 +1,19 @@
+<!-- example of connecting a PS4 DualShock2 remote (via ds4drv) to Turtle Sim -->
+<launch>
+	<param name="teleop/reread_parameters_button" value="5"/>
+	<param name="teleop/enable_button" value="4"/>
+	<param name="teleop/axis_linear" value="5"/>
+	<param name="teleop/axis_angular" value="0"/>
+	<param name="teleop/scale_linear_up_button" value="3"/>
+	<param name="teleop/scale_linear_down_button" value="1"/>
+	<param name="teleop/scale_angular_up_button" value="2"/>
+	<param name="teleop/scale_angular_down_button" value="0"/>
+	<param name="teleop/scale_linear" value="1.0"/>
+	<param name="teleop/scale_angular" value="1.0"/>
+	<param name="teleop/inactivity_timeout" value="0.25"/>
+	<node pkg="turtlesim" name="sim" type="turtlesim_node"/>
+	<node pkg="joy" name="joystick" type="joy_node"/>
+	<node pkg="teleop_twist_joy" name="teleop" type="teleop_node">
+		<remap from="/cmd_vel" to="/turtle1/cmd_vel"/>
+	</node>
+</launch>
