@@ -43,9 +43,13 @@ namespace teleop_twist_joy
 struct TeleopTwistJoy::Impl
 {
   void joyCallback(const sensor_msgs::Joy::ConstPtr& joy);
+  void readParams();
 
   ros::Subscriber joy_sub;
   ros::Publisher cmd_vel_pub;
+
+  int reread_parameters_button;
+  bool reread_parameters_button_pressed;
 
   int enable_button;
   int enable_turbo_button;
@@ -84,7 +88,71 @@ struct TeleopTwistJoy::Impl
   void stop_inactivity_timer(void);
   ros::Timer timer;
   void inactivityTimerCallback(const ros::TimerEvent& e);
+
+  ros::NodeHandle *nh;
+  ros::NodeHandle *nh_param;
 };
+
+void TeleopTwistJoy::Impl::readParams()
+{
+  nh_param->param<int>("reread_parameters_button", reread_parameters_button, -1);
+
+  nh_param->param<int>("enable_button", enable_button, 0);
+  nh_param->param<int>("enable_turbo_button", enable_turbo_button, -1);
+
+  nh_param->param<int>("scale_linear_up_button", scale_linear_up_button, -1);
+  nh_param->param<int>("scale_linear_down_button", scale_linear_down_button, -1);
+  nh_param->param<int>("scale_angular_up_button", scale_angular_up_button, -1);
+  nh_param->param<int>("scale_angular_down_button", scale_angular_down_button, -1);
+
+  axis_linear_map.clear();
+  scale_linear_map.clear();
+  scale_linear_turbo_map.clear();
+  if (nh_param->getParam("axis_linear", axis_linear_map))
+  {
+    nh_param->getParam("axis_linear", axis_linear_map);
+    nh_param->getParam("scale_linear", scale_linear_map);
+    nh_param->getParam("scale_linear_turbo", scale_linear_turbo_map);
+  }
+  else
+  {
+    nh_param->param<int>("axis_linear", axis_linear_map["x"], 1);
+    nh_param->param<double>("scale_linear", scale_linear_map["x"], 0.5);
+    nh_param->param<double>("scale_linear_turbo", scale_linear_turbo_map["x"], 1.0);
+  }
+
+  axis_angular_map.clear();
+  scale_angular_map.clear();
+  scale_angular_turbo_map.clear();
+  if (nh_param->getParam("axis_angular", axis_angular_map))
+  {
+    nh_param->getParam("axis_angular", axis_angular_map);
+    nh_param->getParam("scale_angular", scale_angular_map);
+    nh_param->getParam("scale_angular_turbo", scale_angular_turbo_map);
+  }
+  else
+  {
+    nh_param->param<int>("axis_angular", axis_angular_map["yaw"], 0);
+    nh_param->param<double>("scale_angular", scale_angular_map["yaw"], 0.5);
+    nh_param->param<double>("scale_angular_turbo",
+        scale_angular_turbo_map["yaw"], scale_angular_map["yaw"]);
+  }
+
+  ROS_INFO_NAMED("TeleopTwistJoy", "Teleop enable button %i.", enable_button);
+
+  // if the inactivity_timeout is <= 0, it is disabled
+  nh_param->param<double>("inactivity_timeout", inactivity_timeout, -1.0);
+  // if the inactivity_timout is enabled, create a one-shot timer that is stopped
+  if (inactivity_timeout > 0.0)
+  {
+    timer = nh->createTimer(ros::Duration(inactivity_timeout), &TeleopTwistJoy::Impl::inactivityTimerCallback, this, true, false);
+  }
+  else
+  {
+    // if there was a previous timer, ensure it is stopped
+    timer.stop();
+  }
+}
 
 /**
  * Constructs TeleopTwistJoy.
@@ -95,6 +163,11 @@ TeleopTwistJoy::TeleopTwistJoy(ros::NodeHandle* nh, ros::NodeHandle* nh_param)
 {
   pimpl_ = new Impl;
 
+  pimpl_->nh = nh;
+  pimpl_->nh_param = nh_param;
+
+  pimpl_->reread_parameters_button_pressed=false;
+
   pimpl_->scale_linear_up_button_pressed=false;
   pimpl_->scale_linear_down_button_pressed=false;
   pimpl_->scale_angular_up_button_pressed=false;
@@ -102,43 +175,8 @@ TeleopTwistJoy::TeleopTwistJoy(ros::NodeHandle* nh, ros::NodeHandle* nh_param)
 
   pimpl_->cmd_vel_pub = nh->advertise<geometry_msgs::Twist>("cmd_vel", 1, true);
   pimpl_->joy_sub = nh->subscribe<sensor_msgs::Joy>("joy", 1, &TeleopTwistJoy::Impl::joyCallback, pimpl_);
+  pimpl_->readParams();
 
-  nh_param->param<int>("enable_button", pimpl_->enable_button, 0);
-  nh_param->param<int>("enable_turbo_button", pimpl_->enable_turbo_button, -1);
-
-  nh_param->param<int>("scale_linear_up_button", pimpl_->scale_linear_up_button, -1);
-  nh_param->param<int>("scale_linear_down_button", pimpl_->scale_linear_down_button, -1);
-  nh_param->param<int>("scale_angular_up_button", pimpl_->scale_angular_up_button, -1);
-  nh_param->param<int>("scale_angular_down_button", pimpl_->scale_angular_down_button, -1);
-
-  if (nh_param->getParam("axis_linear", pimpl_->axis_linear_map))
-  {
-    nh_param->getParam("axis_linear", pimpl_->axis_linear_map);
-    nh_param->getParam("scale_linear", pimpl_->scale_linear_map);
-    nh_param->getParam("scale_linear_turbo", pimpl_->scale_linear_turbo_map);
-  }
-  else
-  {
-    nh_param->param<int>("axis_linear", pimpl_->axis_linear_map["x"], 1);
-    nh_param->param<double>("scale_linear", pimpl_->scale_linear_map["x"], 0.5);
-    nh_param->param<double>("scale_linear_turbo", pimpl_->scale_linear_turbo_map["x"], 1.0);
-  }
-
-  if (nh_param->getParam("axis_angular", pimpl_->axis_angular_map))
-  {
-    nh_param->getParam("axis_angular", pimpl_->axis_angular_map);
-    nh_param->getParam("scale_angular", pimpl_->scale_angular_map);
-    nh_param->getParam("scale_angular_turbo", pimpl_->scale_angular_turbo_map);
-  }
-  else
-  {
-    nh_param->param<int>("axis_angular", pimpl_->axis_angular_map["yaw"], 0);
-    nh_param->param<double>("scale_angular", pimpl_->scale_angular_map["yaw"], 0.5);
-    nh_param->param<double>("scale_angular_turbo",
-        pimpl_->scale_angular_turbo_map["yaw"], pimpl_->scale_angular_map["yaw"]);
-  }
-
-  ROS_INFO_NAMED("TeleopTwistJoy", "Teleop enable button %i.", pimpl_->enable_button);
   ROS_INFO_COND_NAMED(pimpl_->enable_turbo_button >= 0, "TeleopTwistJoy",
       "Turbo on button %i.", pimpl_->enable_turbo_button);
 
@@ -161,14 +199,6 @@ TeleopTwistJoy::TeleopTwistJoy(ros::NodeHandle* nh, ros::NodeHandle* nh_param)
   }
 
   pimpl_->sent_disable_msg = false;
-
-  // if the inactivity_timeout is <= 0, it is disabled
-  nh_param->param<double>("inactivity_timeout", pimpl_->inactivity_timeout, -1.0);
-  // if the inactivity_timout is enabled, create a one-shot timer that is stopped
-  if (pimpl_->inactivity_timeout > 0.0)
-  {
-    pimpl_->timer = nh->createTimer(ros::Duration(pimpl_->inactivity_timeout), &TeleopTwistJoy::Impl::inactivityTimerCallback, pimpl_, true, false);
-  }
 }
 
 void TeleopTwistJoy::Impl::scaleUp(std::pair<const std::string, double> &entry)
@@ -210,6 +240,23 @@ void TeleopTwistJoy::Impl::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg
 {
   // Initializes with zeros by default.
   geometry_msgs::Twist cmd_vel_msg;
+
+  // If the re-initialize button is pressed, re-read all parameters
+  if (reread_parameters_button >= 0)
+  {
+    if (joy_msg->buttons[reread_parameters_button])
+    {
+      if (!reread_parameters_button_pressed)
+      {
+        readParams();
+      }
+      reread_parameters_button_pressed=true;
+    }
+    else
+    {
+      reread_parameters_button_pressed=false;
+    }
+  }
 
   if (enable_turbo_button >= 0 && joy_msg->buttons[enable_turbo_button])
   {
