@@ -29,6 +29,7 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSI
 
 #include <map>
 #include <string>
+#include <algorithm>
 
 
 namespace teleop_twist_joy
@@ -48,6 +49,25 @@ struct TeleopTwistJoy::Impl
 
   int enable_button;
   int enable_turbo_button;
+
+  static void scaleUp(std::pair<const std::string, double> &entry);
+  static void scaleDown(std::pair<const std::string, double> &entry);
+  template <class ScaleFunction>
+  static void handleScaleButton(
+      int button,
+      const sensor_msgs::Joy::ConstPtr& joy_msg,
+      bool &button_pressed,
+      std::map<std::string, double> &scale_map,
+      ScaleFunction f);
+
+  int scale_linear_up_button;
+  int scale_linear_down_button;
+  int scale_angular_up_button;
+  int scale_angular_down_button;
+  bool scale_linear_up_button_pressed;
+  bool scale_linear_down_button_pressed;
+  bool scale_angular_up_button_pressed;
+  bool scale_angular_down_button_pressed;
 
   std::map<std::string, int> axis_linear_map;
   std::map<std::string, double> scale_linear_map;
@@ -75,11 +95,21 @@ TeleopTwistJoy::TeleopTwistJoy(ros::NodeHandle* nh, ros::NodeHandle* nh_param)
 {
   pimpl_ = new Impl;
 
+  pimpl_->scale_linear_up_button_pressed=false;
+  pimpl_->scale_linear_down_button_pressed=false;
+  pimpl_->scale_angular_up_button_pressed=false;
+  pimpl_->scale_angular_down_button_pressed=false;
+
   pimpl_->cmd_vel_pub = nh->advertise<geometry_msgs::Twist>("cmd_vel", 1, true);
   pimpl_->joy_sub = nh->subscribe<sensor_msgs::Joy>("joy", 1, &TeleopTwistJoy::Impl::joyCallback, pimpl_);
 
   nh_param->param<int>("enable_button", pimpl_->enable_button, 0);
   nh_param->param<int>("enable_turbo_button", pimpl_->enable_turbo_button, -1);
+
+  nh_param->param<int>("scale_linear_up_button", pimpl_->scale_linear_up_button, -1);
+  nh_param->param<int>("scale_linear_down_button", pimpl_->scale_linear_down_button, -1);
+  nh_param->param<int>("scale_angular_up_button", pimpl_->scale_angular_up_button, -1);
+  nh_param->param<int>("scale_angular_down_button", pimpl_->scale_angular_down_button, -1);
 
   if (nh_param->getParam("axis_linear", pimpl_->axis_linear_map))
   {
@@ -138,6 +168,41 @@ TeleopTwistJoy::TeleopTwistJoy(ros::NodeHandle* nh, ros::NodeHandle* nh_param)
   if (pimpl_->inactivity_timeout > 0.0)
   {
     pimpl_->timer = nh->createTimer(ros::Duration(pimpl_->inactivity_timeout), &TeleopTwistJoy::Impl::inactivityTimerCallback, pimpl_, true, false);
+  }
+}
+
+void TeleopTwistJoy::Impl::scaleUp(std::pair<const std::string, double> &entry)
+{
+  entry.second *= 1.10;
+}
+
+void TeleopTwistJoy::Impl::scaleDown(std::pair<const std::string, double> &entry)
+{
+  entry.second *= (1/1.10);
+}
+
+template <class ScaleFunction>
+void TeleopTwistJoy::Impl::handleScaleButton(
+    int button,
+    const sensor_msgs::Joy::ConstPtr& joy_msg,
+    bool &button_pressed,
+    std::map<std::string, double> &scale_map,
+    ScaleFunction f)
+{
+  if (button >= 0)
+  {
+    if (joy_msg->buttons[button])
+    {
+      if (!button_pressed)
+      {
+        std::for_each(scale_map.begin(), scale_map.end(), f);
+      }
+      button_pressed=true;
+    }
+    else
+    {
+      button_pressed=false;
+    }
   }
 }
 
@@ -219,6 +284,12 @@ void TeleopTwistJoy::Impl::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg
       stop_inactivity_timer();
     }
   }
+
+  // Handle scale up/down buttons
+  handleScaleButton(scale_linear_up_button, joy_msg, scale_linear_up_button_pressed, scale_linear_map, scaleUp);
+  handleScaleButton(scale_linear_down_button, joy_msg, scale_linear_down_button_pressed, scale_linear_map, scaleDown);
+  handleScaleButton(scale_angular_up_button, joy_msg, scale_angular_up_button_pressed, scale_angular_map, scaleUp);
+  handleScaleButton(scale_angular_down_button, joy_msg, scale_angular_down_button_pressed, scale_angular_map, scaleDown);
 }
 
 void TeleopTwistJoy::Impl::restart_inactivity_timer(void)
