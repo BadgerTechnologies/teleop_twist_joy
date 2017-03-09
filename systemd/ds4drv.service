@@ -1,0 +1,10 @@
+[Unit]
+Description=PS4 Bluetooth driver
+
+[Service]
+EnvironmentFile=%h/.config/ant/ros-ant
+ExecStart=/usr/local/bin/ds4drv --hidraw
+KillMode=mixed
+
+[Install]
+WantedBy=ant-teleop-ps4.service

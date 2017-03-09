@@ -1,0 +1,15 @@
+[Unit]
+Description=BAR Teleoperation using PlayStation 4 controller
+Requires=roscore.service
+After=roscore.service
+Requires=ds4drv.service
+After=ds4drv.service
+PartOf=ant-nav.target
+
+[Service]
+EnvironmentFile=%h/.config/ant/ros-ant
+ExecStart=/opt/ros/latest/bin/roslaunch teleop_twist_joy bar-joy-teleop.launch
+KillMode=mixed
+
+[Install]
+WantedBy=ant-nav.target

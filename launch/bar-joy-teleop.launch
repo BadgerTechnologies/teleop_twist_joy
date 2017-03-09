@@ -11,7 +11,7 @@
 	<param name="teleop_ps4/scale_linear" value="0.5"/>
 	<param name="teleop_ps4/scale_angular" value="0.5"/>
 	<param name="teleop_ps4/inactivity_timeout" value="0.25"/>
-	<param name="joystick_ps4/dev" value="/dev/input/js4"/>
+	<param name="joystick_ps4/dev" value="/dev/input/js_ps4"/>
 	<node pkg="joy" name="joystick_ps4" type="joy_node">
 		<remap from="/joy" to="/joy_ps4"/>
 	</node>
