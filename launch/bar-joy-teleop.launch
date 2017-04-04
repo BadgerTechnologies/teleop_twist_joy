@@ -17,6 +17,6 @@
 	</node>
 	<node pkg="teleop_twist_joy" name="teleop_ps4" type="teleop_node">
 		<remap from="/joy" to="/joy_ps4"/>
-		<remap from="/cmd_vel" to="/cmd_vel_mux/input/joystick_ps4"/>
+		<remap from="/cmd_vel" to="/vel_mux_safe/teleop_ps4"/>
 	</node>
 </launch>
