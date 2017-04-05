@@ -47,11 +47,13 @@ struct TeleopTwistJoy::Impl
 
   ros::Subscriber joy_sub;
   ros::Publisher cmd_vel_pub;
+  ros::Publisher cmd_vel2_pub;
 
   int reread_parameters_button;
   bool reread_parameters_button_pressed;
 
   int enable_button;
+  int enable_button2;
   int enable_turbo_button;
 
   static void scaleUp(std::pair<const std::string, double> &entry);
@@ -82,6 +84,7 @@ struct TeleopTwistJoy::Impl
   std::map<std::string, double> scale_angular_turbo_map;
 
   bool sent_disable_msg;
+  bool sent_enable2_msg;
 
   double inactivity_timeout;
   void restart_inactivity_timer(void);
@@ -98,6 +101,7 @@ void TeleopTwistJoy::Impl::readParams()
   nh_param->param<int>("reread_parameters_button", reread_parameters_button, -1);
 
   nh_param->param<int>("enable_button", enable_button, 0);
+  nh_param->param<int>("enable_button2", enable_button2, -1);
   nh_param->param<int>("enable_turbo_button", enable_turbo_button, -1);
 
   nh_param->param<int>("scale_linear_up_button", scale_linear_up_button, -1);
@@ -174,8 +178,15 @@ TeleopTwistJoy::TeleopTwistJoy(ros::NodeHandle* nh, ros::NodeHandle* nh_param)
   pimpl_->scale_angular_down_button_pressed=false;
 
   pimpl_->cmd_vel_pub = nh->advertise<geometry_msgs::Twist>("cmd_vel", 1, true);
+  if (pimpl_->enable_button2 >= 0)
+  {
+    pimpl_->cmd_vel2_pub = nh->advertise<geometry_msgs::Twist>("cmd_vel2", 1, true);
+  }
   pimpl_->joy_sub = nh->subscribe<sensor_msgs::Joy>("joy", 1, &TeleopTwistJoy::Impl::joyCallback, pimpl_);
   pimpl_->readParams();
+
+  ROS_INFO_COND_NAMED(pimpl_->enable_button2 >= 0, "TeleopTwistJoy",
+      "Teleop enable button2 %i.", pimpl_->enable_button2);
 
   ROS_INFO_COND_NAMED(pimpl_->enable_turbo_button >= 0, "TeleopTwistJoy",
       "Turbo on button %i.", pimpl_->enable_turbo_button);
@@ -199,6 +210,7 @@ TeleopTwistJoy::TeleopTwistJoy(ros::NodeHandle* nh, ros::NodeHandle* nh_param)
   }
 
   pimpl_->sent_disable_msg = false;
+  pimpl_->sent_enable2_msg = false;
 }
 
 void TeleopTwistJoy::Impl::scaleUp(std::pair<const std::string, double> &entry)
@@ -289,7 +301,7 @@ void TeleopTwistJoy::Impl::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg
     sent_disable_msg = false;
     restart_inactivity_timer();
   }
-  else if (joy_msg->buttons[enable_button])
+  else if (joy_msg->buttons[enable_button] | (enable_button2 >= 0 && joy_msg->buttons[enable_button2]))
   {
     if  (axis_linear_map.find("x") != axis_linear_map.end())
     {
@@ -316,7 +328,15 @@ void TeleopTwistJoy::Impl::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg
       cmd_vel_msg.angular.x = joy_msg->axes[axis_angular_map["roll"]] * scale_angular_map["roll"];
     }
 
-    cmd_vel_pub.publish(cmd_vel_msg);
+    if (joy_msg->buttons[enable_button])
+    {
+      cmd_vel_pub.publish(cmd_vel_msg);
+    }
+    if (enable_button2 >= 0 && joy_msg->buttons[enable_button2])
+    {
+      cmd_vel2_pub.publish(cmd_vel_msg);
+      sent_enable2_msg = true;
+    }
     sent_disable_msg = false;
     restart_inactivity_timer();
   }
@@ -328,6 +348,13 @@ void TeleopTwistJoy::Impl::joyCallback(const sensor_msgs::Joy::ConstPtr& joy_msg
     {
       cmd_vel_pub.publish(cmd_vel_msg);
       sent_disable_msg = true;
+
+      if (sent_enable2_msg)
+      {
+        cmd_vel2_pub.publish(cmd_vel_msg);
+        sent_enable2_msg = false;
+      }
+
       stop_inactivity_timer();
     }
   }
@@ -364,6 +391,11 @@ void TeleopTwistJoy::Impl::inactivityTimerCallback(const ros::TimerEvent& e)
     geometry_msgs::Twist cmd_vel_msg;
     ROS_INFO_NAMED("TeleopTwistJoy", "Joystick timed out, stopping motion");
     cmd_vel_pub.publish(cmd_vel_msg);
+    if (enable_button2 >= 0)
+    {
+      cmd_vel2_pub.publish(cmd_vel_msg);
+      sent_enable2_msg = false;
+    }
     sent_disable_msg = true;
   }
 }
