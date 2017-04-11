@@ -2,6 +2,7 @@
 <launch>
 	<param name="teleop_ps4/reread_parameters_button" value="5"/>
 	<param name="teleop_ps4/enable_button" value="4"/>
+	<param name="teleop_ps4/enable_button2" value="6"/>
 	<param name="teleop_ps4/axis_linear" value="1"/>
 	<param name="teleop_ps4/axis_angular" value="2"/>
 	<param name="teleop_ps4/scale_linear_up_button" value="3"/>
@@ -18,5 +19,6 @@
 	<node pkg="teleop_twist_joy" name="teleop_ps4" type="teleop_node">
 		<remap from="/joy" to="/joy_ps4"/>
 		<remap from="/cmd_vel" to="/vel_mux_safe/teleop_ps4"/>
+		<remap from="/cmd_vel2" to="/vel_mux_unchecked/teleop_ps4"/>
 	</node>
 </launch>
